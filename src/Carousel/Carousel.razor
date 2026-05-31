@@ -1,0 +1,230 @@
+@implements IAsyncDisposable
+
+<section @ref="_root" class="carousel" role="region" aria-roledescription="carousel" aria-label="@AriaLabel" aria-live="polite" tabindex="0" @onkeydown="HandleKeyDown">
+    @if (Items.Count > 0)
+    {
+        <div class="carousel__viewport">
+            @for (var i = 0; i < Items.Count; i++)
+            {
+                var isActive = i == _currentIndex;
+                var isVisible = ShouldRenderSlide(i);
+
+                <article class="carousel__slide @(isActive ? "is-active" : string.Empty)"
+                         role="group"
+                         aria-roledescription="slide"
+                         aria-label="@(string.Format("{0} of {1}", i + 1, Items.Count))"
+                         aria-hidden="@(!isActive)">
+                    @if (isVisible)
+                    {
+                        <img src="@Items[i].ImageUrl" alt="@Items[i].AltText" loading="lazy" decoding="async" />
+                        @if (!string.IsNullOrWhiteSpace(Items[i].Title) || !string.IsNullOrWhiteSpace(Items[i].Description))
+                        {
+                            <div class="carousel__caption">
+                                @if (!string.IsNullOrWhiteSpace(Items[i].Title))
+                                {
+                                    <h3>@Items[i].Title</h3>
+                                }
+
+                                @if (!string.IsNullOrWhiteSpace(Items[i].Description))
+                                {
+                                    <p>@Items[i].Description</p>
+                                }
+                            </div>
+                        }
+                    }
+                </article>
+            }
+        </div>
+
+        <div class="carousel__controls">
+            <button type="button" class="carousel__btn" @onclick="Previous" aria-label="Previous slide">◀</button>
+            <button type="button" class="carousel__btn" @onclick="Next" aria-label="Next slide">▶</button>
+        </div>
+
+        <div class="carousel__indicators" role="tablist" aria-label="Slide navigation">
+            @for (var i = 0; i < Items.Count; i++)
+            {
+                var index = i;
+                <button type="button"
+                        role="tab"
+                        class="carousel__indicator @(i == _currentIndex ? "is-active" : string.Empty)"
+                        @onclick="(() => GoTo(index))"
+                        aria-label="@(string.Format("Go to slide {0}", i + 1))"
+                        aria-selected="@(i == _currentIndex)"
+                        aria-current="@(i == _currentIndex ? "true" : null)"></button>
+            }
+        </div>
+    }
+</section>
+
+@code {
+    [Parameter]
+    public IReadOnlyList<CarouselSlide> Items { get; set; } = [];
+
+    [Parameter]
+    public bool AutoPlay { get; set; } = true;
+
+    [Parameter]
+    public int AutoPlayIntervalMs { get; set; } = 5000;
+
+    [Parameter]
+    public string AriaLabel { get; set; } = "Carousel";
+
+    private CancellationTokenSource? _autoplayCts;
+    private ElementReference _root;
+    private IJSObjectReference? _module;
+    private DotNetObjectReference<Carousel>? _self;
+    private int _currentIndex;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _module = await JS.InvokeAsync<IJSObjectReference>("import", "./_content/Carousel/carousel.js");
+            _self = DotNetObjectReference.Create(this);
+            await _module.InvokeVoidAsync("bindSwipe", _root, _self);
+            StartAutoplay();
+        }
+    }
+
+    [Inject]
+    private IJSRuntime JS { get; set; } = default!;
+
+    protected override void OnParametersSet()
+    {
+        if (Items.Count == 0)
+        {
+            _currentIndex = 0;
+            StopAutoplay();
+            return;
+        }
+
+        if (_currentIndex >= Items.Count)
+        {
+            _currentIndex = 0;
+        }
+
+        if (AutoPlay)
+        {
+            StartAutoplay();
+        }
+        else
+        {
+            StopAutoplay();
+        }
+    }
+
+    private void HandleKeyDown(KeyboardEventArgs args)
+    {
+        if (args.Key is "ArrowRight")
+        {
+            Next();
+        }
+        else if (args.Key is "ArrowLeft")
+        {
+            Previous();
+        }
+    }
+
+    [JSInvokable]
+    public Task SwipeLeft()
+    {
+        Next();
+        return Task.CompletedTask;
+    }
+
+    [JSInvokable]
+    public Task SwipeRight()
+    {
+        Previous();
+        return Task.CompletedTask;
+    }
+
+    private bool ShouldRenderSlide(int index)
+    {
+        if (Items.Count <= 3)
+        {
+            return true;
+        }
+
+        var previous = _currentIndex == 0 ? Items.Count - 1 : _currentIndex - 1;
+        var next = _currentIndex == Items.Count - 1 ? 0 : _currentIndex + 1;
+
+        return index == _currentIndex || index == previous || index == next;
+    }
+
+    private void Next()
+    {
+        if (Items.Count == 0)
+        {
+            return;
+        }
+
+        GoTo((_currentIndex + 1) % Items.Count);
+    }
+
+    private void Previous()
+    {
+        if (Items.Count == 0)
+        {
+            return;
+        }
+
+        GoTo((_currentIndex - 1 + Items.Count) % Items.Count);
+    }
+
+    private void GoTo(int index)
+    {
+        if (Items.Count == 0)
+        {
+            return;
+        }
+
+        _currentIndex = index;
+        StateHasChanged();
+    }
+
+    private void StartAutoplay()
+    {
+        if (!AutoPlay || Items.Count <= 1 || AutoPlayIntervalMs <= 0 || _autoplayCts is not null)
+        {
+            return;
+        }
+
+        _autoplayCts = new CancellationTokenSource();
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                while (!_autoplayCts.Token.IsCancellationRequested)
+                {
+                    await Task.Delay(AutoPlayIntervalMs, _autoplayCts.Token);
+                    await InvokeAsync(Next);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+            }
+        }, _autoplayCts.Token);
+    }
+
+    private void StopAutoplay()
+    {
+        _autoplayCts?.Cancel();
+        _autoplayCts?.Dispose();
+        _autoplayCts = null;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        StopAutoplay();
+
+        _self?.Dispose();
+
+        if (_module is not null)
+        {
+            await _module.DisposeAsync();
+        }
+
+    }
+}

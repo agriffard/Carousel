@@ -1,0 +1,36 @@
+﻿@page "/"
+
+<PageTitle>Home</PageTitle>
+
+<h1>Carousel sample</h1>
+
+<p>Use touch/swipe, keyboard arrows, controls, and indicators to navigate.</p>
+
+<Carousel Items="@Slides" AutoPlay="true" AutoPlayIntervalMs="3500" AriaLabel="Sample image carousel" />
+
+@code {
+    private static readonly IReadOnlyList<CarouselSlide> Slides =
+    [
+        new()
+        {
+            ImageUrl = "https://picsum.photos/id/1018/1200/500",
+            AltText = "Mountain landscape",
+            Title = "Touch + swipe",
+            Description = "Swipe left or right on touch devices."
+        },
+        new()
+        {
+            ImageUrl = "https://picsum.photos/id/1025/1200/500",
+            AltText = "Dog portrait",
+            Title = "Autoplay + keyboard",
+            Description = "Autoplay rotates slides and arrow keys navigate."
+        },
+        new()
+        {
+            ImageUrl = "https://picsum.photos/id/1039/1200/500",
+            AltText = "Bridge over water",
+            Title = "Lazy slide rendering",
+            Description = "Only active and adjacent slides are rendered."
+        }
+    ];
+}
