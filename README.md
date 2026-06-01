@@ -41,12 +41,6 @@ Run the sample app:
 dotnet run --project samples/Carousel.Sample/Carousel.Sample.csproj
 ```
 
-## CI/CD workflows
-
-- **CI** (`.github/workflows/ci.yml`): restore, build, test on pushes and PRs
-- **NuGet publish** (`.github/workflows/nuget-publish.yml`): packs and publishes package on version tags (`v*`) or manual dispatch
-- **GitHub Pages** (`.github/workflows/pages.yml`): publishes the sample app as static site
-
 ## Accessibility notes
 
 The component includes:
